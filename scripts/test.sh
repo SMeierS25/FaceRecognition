@@ -66,3 +66,28 @@ MAX_WAIT_SECONDS=30
 ELAPSED=0
 SLEEP=2
 
+while ! aws s3 ls "s3://${OUT_BUCKET}/${RESULT_KEY}" >/dev/null 2>&1; do
+  if (( ELAPSED >= MAX_WAIT_SECONDS )); then
+    echo "Fehler: Ergebnis nicht innerhalb von ${MAX_WAIT_SECONDS} Sekunden gefunden."
+    exit 1
+  fi
+  echo "  ...warte (${ELAPSED}s)"
+  sleep $SLEEP
+  ELAPSED=$((ELAPSED + SLEEP))
+done
+
+echo "Ergebnis gefunden."
+
+
+echo
+echo "[3/3] Lade Ergebnis-JSON herunter nach ${LOCAL_RESULT} ..."
+aws s3 cp "s3://${OUT_BUCKET}/${RESULT_KEY}" "${LOCAL_RESULT}"
+
+echo
+echo "Ergebnis:"
+python3 - <<EOF
+import json; print(json.dumps(json.load(open("${LOCAL_RESULT}")), indent=2))
+EOF
+
+echo
+echo "Test abgeschlossen. Ergebnis-JSON liegt unter: ${LOCAL_RESULT}"
