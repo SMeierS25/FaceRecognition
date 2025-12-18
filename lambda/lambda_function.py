@@ -76,3 +76,38 @@ def save_result_to_s3(out_bucket: str, key: str, data: Dict[str, Any]) -> None:
         Body=json.dumps(data, indent=2),
         ContentType="application/json",
     )
+
+def lambda_handler(event, context):
+    """
+    Unterstützt zwei Aufrufarten:
+    1) S3-Event (normal)
+    2) Direkter Test-Aufruf via AWS CLI: {"bucket": "...", "key": "..."}
+    """
+    if "bucket" in event and "key" in event:
+        # Manuelle Testausführung
+        bucket = event["bucket"]
+        key = event["key"]
+
+        result = analyze_image(bucket, key)
+        out_key = build_output_key(key)
+        save_result_to_s3(OUT_BUCKET, out_key, result)
+
+        return {"status": "manual_ok", "out_key": out_key}
+
+    # Normale S3-Event-Logik
+    processed_files = []
+    for record in event.get("Records", []):
+        s3_info = record.get("s3", {})
+        bucket = s3_info.get("bucket", {}).get("name")
+        key = s3_info.get("object", {}).get("key")
+
+        if not bucket or not key:
+            continue
+
+        result = analyze_image(bucket, key)
+        out_key = build_output_key(key)
+        save_result_to_s3(OUT_BUCKET, out_key, result)
+
+        processed_files.append(key)
+
+    return {"status": "ok", "processed_files": processed_files}
